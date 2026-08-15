@@ -26,6 +26,13 @@ dist-ssr
 # Environment
 .env
 
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
 # Backend
 backend/.env
 backend/.venv
@@ -33,3 +40,4 @@ backend/__pycache__
 backend/**/__pycache__
 backend/uploads/
 backend/database/*.db
+backend/database/invoice_os.db
