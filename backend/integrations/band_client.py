@@ -42,6 +42,13 @@ def is_configured() -> bool:
     return bool((AGENT_KEY or API_KEY) and CHAT_ID)
 
 
+def _mentions() -> list[dict[str, str]]:
+    """Who each post is addressed to. Band scopes visibility by mention, so a
+    post with no mentions is accepted but reaches nobody."""
+    handle = os.getenv("BAND_OWNER_HANDLE", "")
+    return [{"handle": handle}] if handle else []
+
+
 def _headers() -> dict[str, str]:
     # Band's agent API authenticates with X-API-Key, not a Bearer token.
     return {"X-API-Key": AGENT_KEY or API_KEY, "Content-Type": "application/json"}
@@ -57,12 +64,16 @@ def post_finding(invoice_id: int, agent: str, finding: dict[str, Any]) -> None:
 
     summary = finding.get("detail") or json.dumps(finding)[:280]
     try:
+        # Band requires message.content plus a mentions array of identifier
+        # objects; a bare string is rejected and an empty array is not delivered.
         requests.post(
             f"{BASE_URL}/agent/chats/{CHAT_ID}/messages",
             headers=_headers(),
             json={
-                "message": f"[invoice {invoice_id}] **{agent}** — {summary}",
-                "metadata": {"invoice_id": invoice_id, "agent": agent, "finding": finding},
+                "message": {
+                    "content": f"[invoice {invoice_id}] {agent} — {summary}",
+                    "mentions": _mentions(),
+                }
             },
             timeout=TIMEOUT,
         )
