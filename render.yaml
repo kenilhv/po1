@@ -3,9 +3,9 @@
 # Two services:
 #   po1-api      the FastAPI backend, agent pipeline, and the human task pages
 #                that Terac participants land on (/label and /review/{id})
-#   po1-nightly  a Render Workflow that runs the scheduled payment batch,
-#                the way a real AP department pays on a cycle rather than
-#                the instant each invoice clears
+#   po1-payment-run  a scheduled job that batches approved invoices, the way
+#                    a real AP department pays on a cycle rather than the
+#                    instant each invoice clears
 
 services:
   - type: web
@@ -29,7 +29,13 @@ services:
         sync: false
       - key: BAND_API_KEY
         sync: false
+      - key: BAND_AGENT_API_KEY
+        sync: false
+      - key: BAND_AGENT_ID
+        sync: false
       - key: BAND_CHAT_ID
+        sync: false
+      - key: BAND_OWNER_HANDLE
         sync: false
       - key: STRIPE_RESTRICTED_KEY
         sync: false
@@ -47,9 +53,11 @@ services:
         value: "2000"
       - key: PO1_FOUNDER_LIMIT
         value: "10000"
-
-workflows:
-  - name: po1-payment-run
+  # PO1's payment run: batches approved invoices the way a real AP cycle
+  # does, rather than paying the instant each invoice clears.
+  - type: cron
+    name: po1-payment-run
+    runtime: python
     plan: starter
     rootDir: backend
     buildCommand: pip install -r requirements.txt
