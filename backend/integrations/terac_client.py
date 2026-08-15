@@ -47,7 +47,9 @@ def _headers() -> dict[str, str]:
 
 def _request(method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     url = f"{BASE_URL}{path}"
-    resp = requests.request(method, url, headers=_headers(), json=payload, timeout=TIMEOUT)
+    # Terac rejects a bodyless POST with PARSE_ERROR, so always send an object.
+    body = payload if payload is not None else ({} if method == "POST" else None)
+    resp = requests.request(method, url, headers=_headers(), json=body, timeout=TIMEOUT)
     if resp.status_code >= 400:
         raise TeracError(f"{method} {path} -> {resp.status_code}: {resp.text[:400]}")
     return resp.json() if resp.content else {}
@@ -115,6 +117,22 @@ def escalate_invoice(
         "business_type": "b2c",
         "unrestricted_audience": True,  # general population — fastest fill
         "expected_days_to_complete": 5,  # API minimum
+        # Terac requires a screener before launch. Written per their guidance:
+        # ask what people actually do rather than naming the criterion, offer
+        # plausible alternatives, and include a catch-all that rejects.
+        "screening_questions": [
+            {
+                "key": "bill_exposure",
+                "text": "Which of these have you personally done in the last year?",
+                "pick": "one",
+                "answers": [
+                    {"text": "Reviewed, approved or queried a bill at work", "qualify_logic": "may"},
+                    {"text": "Sent or paid invoices for my own business or freelance work", "qualify_logic": "may"},
+                    {"text": "Handled household bills and noticed a charge that looked wrong", "qualify_logic": "may"},
+                    {"text": "None of the above", "qualify_logic": "reject"},
+                ],
+            }
+        ],
         "tasks": [
             {
                 "sequence": 1,
@@ -204,6 +222,22 @@ def launch_labeling_study(num_participants: int = 25) -> dict[str, Any]:
         "business_type": "b2c",
         "unrestricted_audience": True,
         "expected_days_to_complete": 5,  # API minimum
+        # Terac requires a screener before launch. Written per their guidance:
+        # ask what people actually do rather than naming the criterion, offer
+        # plausible alternatives, and include a catch-all that rejects.
+        "screening_questions": [
+            {
+                "key": "bill_exposure",
+                "text": "Which of these have you personally done in the last year?",
+                "pick": "one",
+                "answers": [
+                    {"text": "Reviewed, approved or queried a bill at work", "qualify_logic": "may"},
+                    {"text": "Sent or paid invoices for my own business or freelance work", "qualify_logic": "may"},
+                    {"text": "Handled household bills and noticed a charge that looked wrong", "qualify_logic": "may"},
+                    {"text": "None of the above", "qualify_logic": "reject"},
+                ],
+            }
+        ],
         "tasks": [
             {
                 "sequence": 1,

@@ -32,7 +32,9 @@ H = {"Authorization": f"Bearer {KEY}", "Content-Type": "application/json"}
 
 
 def api(method: str, path: str, payload: dict | None = None) -> dict:
-    r = requests.request(method, f"{BASE}{path}", headers=H, json=payload, timeout=40)
+    # Terac rejects a bodyless POST with PARSE_ERROR, so always send an object.
+    body = payload if payload is not None else ({} if method == "POST" else None)
+    r = requests.request(method, f"{BASE}{path}", headers=H, json=body, timeout=40)
     if r.status_code >= 400:
         sys.exit(f"{method} {path} -> {r.status_code}: {r.text[:400]}")
     return r.json() if r.content else {}
@@ -95,6 +97,22 @@ def main() -> None:
         "business_type": "b2c",
         "unrestricted_audience": True,  # general population fills fastest
         "expected_days_to_complete": 5,  # API minimum
+        # Terac requires a screener before launch. Written per their guidance:
+        # ask what people actually do rather than naming the criterion, offer
+        # plausible alternatives, and include a catch-all that rejects.
+        "screening_questions": [
+            {
+                "key": "bill_exposure",
+                "text": "Which of these have you personally done in the last year?",
+                "pick": "one",
+                "answers": [
+                    {"text": "Reviewed, approved or queried a bill at work", "qualify_logic": "may"},
+                    {"text": "Sent or paid invoices for my own business or freelance work", "qualify_logic": "may"},
+                    {"text": "Handled household bills and noticed a charge that looked wrong", "qualify_logic": "may"},
+                    {"text": "None of the above", "qualify_logic": "reject"},
+                ],
+            }
+        ],
         "tasks": [
             {
                 "sequence": 1,
