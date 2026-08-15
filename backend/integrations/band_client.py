@@ -95,19 +95,31 @@ def recruit_specialist(invoice_id: int, role: str, reason: str) -> dict[str, Any
         peers = requests.get(
             f"{BASE_URL}/agent/peers", headers=_headers(), timeout=TIMEOUT
         ).json()
-        candidates = peers.get("data") or peers.get("peers") or []
+        candidates = peers.get("data") or []
+
+        # Prefer a peer whose name or handle matches the role we need; fall back
+        # to the human owner, who is the real controller for a banking change.
         match = next(
-            (p for p in candidates if role.lower() in str(p.get("name", "")).lower()),
+            (
+                c for c in candidates
+                if role.lower() in f"{c.get('name', '')} {c.get('handle', '')}".lower()
+            ),
             None,
-        )
+        ) or next((c for c in candidates if c.get("type") == "User"), None)
+
         if match:
             requests.post(
                 f"{BASE_URL}/agent/chats/{CHAT_ID}/participants",
                 headers=_headers(),
-                json={"agent_id": match.get("id") or match.get("agent_id")},
+                json={"participant_id": match["id"], "type": match.get("type", "Agent")},
                 timeout=TIMEOUT,
             )
-            return {"recruited": role, "agent_id": match.get("id"), "via": "band"}
+            return {
+                "recruited": match.get("name", role),
+                "participant_id": match["id"],
+                "role": role,
+                "via": "band",
+            }
     except requests.RequestException:
         pass
 
