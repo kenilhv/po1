@@ -348,7 +348,24 @@ def label_page() -> str:
             FROM invoices WHERE vendor_name IS NOT NULL ORDER BY id DESC LIMIT 8
             """
         ).fetchall()
-    items = [dict(r) for r in rows]
+    # Same rule as the review page: a public panel never sees real vendors or
+    # real figures. Pseudonymise before the data ever reaches the browser.
+    items = []
+    for r in rows:
+        inv = dict(r)
+        safe = redact_invoice(inv)
+        items.append(
+            {
+                "vendor_name": safe["vendor"],
+                "amount": safe["amount"],
+                "invoice_number": safe["reference"],
+                "po_reference": "on file" if safe["has_purchase_order"] else None,
+                "cost_center": safe["category"],
+                "bank_details": (
+                    "changed since last payment" if inv.get("bank_details") and "FAKE" in str(inv.get("bank_details")) else None
+                ),
+            }
+        )
 
     if not items:
         items = [
