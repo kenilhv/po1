@@ -11,18 +11,22 @@ from fastapi.middleware.cors import CORSMiddleware
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
+# Load config BEFORE importing anything that reads env vars at module scope,
+# otherwise integration clients initialise with empty credentials.
+load_dotenv(ROOT / ".env")
+
 from api.ap import router as ap_router
 from api.auth import router as auth_router
 from api.cfo import router as cfo_router
+from api.po1 import router as po1_router
 from api.ws import router as ws_router
 from database.db import get_conn, init_db
 from models.schemas import ApproveRequest, WebSocketTraceMessage
 from services.processing import process_invoice_job
 from services import job_service
 
-load_dotenv(ROOT / ".env")
 
-app = FastAPI(title="PayCrew API")
+app = FastAPI(title="PO1 — Autonomous Accounts Payable")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -45,6 +49,9 @@ app.include_router(auth_router, prefix="/v1")
 app.include_router(ap_router, prefix="/v1")
 app.include_router(cfo_router, prefix="/v1")
 app.include_router(ws_router, prefix="/v1")
+
+# PO1 — AP pipeline, human task pages, revenue
+app.include_router(po1_router)
 
 UPLOAD_DIR = ROOT / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
@@ -100,6 +107,46 @@ async def run_crew_legacy(invoice_id: int, pdf_path: str) -> None:
         await broadcast(invoice_id, trace)
 
     await run_invoice_pipeline(invoice_id, pdf_path, on_agent)
+
+
+async def run_po1_pipeline(invoice_id: int, pdf_path: str) -> None:
+    """PO1's 10-agent AP pipeline, streaming each step to connected clients."""
+    from crew.ap_orchestrator import run_ap_pipeline
+
+    async def on_agent(msg: dict[str, Any]) -> None:
+        payload = {"invoice_id": invoice_id, **msg}
+        log_audit(
+            invoice_id,
+            str(payload.get("agent", "")),
+            payload.get("model_used"),
+            str(payload.get("detail", ""))[:200],
+            str(payload.get("result", "")),
+            payload.get("confidence"),
+        )
+        dead: list[WebSocket] = []
+        for ws in ws_clients.get(invoice_id, set()):
+            try:
+                await ws.send_json(payload)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            ws_clients[invoice_id].discard(ws)
+
+    await run_ap_pipeline(invoice_id, pdf_path, on_agent)
+
+
+@app.get("/health")
+def health() -> dict[str, Any]:
+    from integrations import band_client, linq_client, payments, pioneer_client, terac_client
+
+    return {
+        "service": "PO1",
+        "terac": terac_client.is_configured(),
+        "band": band_client.is_configured(),
+        "linq": linq_client.is_configured(),
+        "stripe": payments.is_configured(),
+        "pioneer": pioneer_client.is_configured(),
+    }
 
 
 @app.on_event("startup")

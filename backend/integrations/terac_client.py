@@ -104,7 +104,7 @@ def escalate_invoice(
         "num_participants": num_reviewers,
         "business_type": "b2c",
         "unrestricted_audience": True,  # general population — fastest fill
-        "expected_days_to_complete": 1,
+        "expected_days_to_complete": 5,  # API minimum
         "tasks": [
             {
                 "sequence": 1,
@@ -193,7 +193,7 @@ def launch_labeling_study(num_participants: int = 25) -> dict[str, Any]:
         "num_participants": num_participants,
         "business_type": "b2c",
         "unrestricted_audience": True,
-        "expected_days_to_complete": 1,
+        "expected_days_to_complete": 5,  # API minimum
         "tasks": [
             {
                 "sequence": 1,

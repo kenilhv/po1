@@ -1,0 +1,66 @@
+# PO1 — Render deployment.
+#
+# Two services:
+#   po1-api      the FastAPI backend, agent pipeline, and the human task pages
+#                that Terac participants land on (/label and /review/{id})
+#   po1-nightly  a Render Workflow that runs the scheduled payment batch,
+#                the way a real AP department pays on a cycle rather than
+#                the instant each invoice clears
+
+services:
+  - type: web
+    name: po1-api
+    runtime: python
+    plan: starter
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"
+      - key: TERAC_API_KEY
+        sync: false
+      - key: PIONEER_API_KEY
+        sync: false
+      - key: LINQ_API_KEY
+        sync: false
+      - key: LINQ_PHONE_NUMBER
+        sync: false
+      - key: BAND_API_KEY
+        sync: false
+      - key: BAND_CHAT_ID
+        sync: false
+      - key: STRIPE_RESTRICTED_KEY
+        sync: false
+      - key: STRIPE_PAYMENT_LINK
+        sync: false
+      - key: FOUNDER_PHONE
+        sync: false
+      - key: VENDOR_PHONE
+        sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: USE_LLM
+        value: "1"
+      - key: PO1_AUTO_LIMIT
+        value: "2000"
+      - key: PO1_FOUNDER_LIMIT
+        value: "10000"
+
+workflows:
+  - name: po1-payment-run
+    plan: starter
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m workflows.payment_run
+    schedule: "0 * * * *"
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"
+      - key: TERAC_API_KEY
+        sync: false
+      - key: LINQ_API_KEY
+        sync: false
+      - key: STRIPE_RESTRICTED_KEY
+        sync: false
