@@ -368,14 +368,16 @@ def label_page() -> str:
         )
 
     if not items:
+        # Fallback when the database is fresh. Already pseudonymous — these are
+        # illustrative suppliers, not real ones.
         items = [
-            {"id": 0, "vendor_name": "OfficeSupplyCo", "invoice_number": "INV-2024-441",
-             "amount": 800, "po_reference": "PO-8821", "cost_center": "G&A"},
-            {"id": 0, "vendor_name": "CleanVendor Inc", "invoice_number": "INV-2024-910",
-             "amount": 480, "po_reference": "PO-9901", "cost_center": "G&A",
+            {"vendor_name": "Northgate Supply", "invoice_number": "REF-4182",
+             "amount": 664.0, "po_reference": "on file", "cost_center": "G&A"},
+            {"vendor_name": "Cedarline Services", "invoice_number": "REF-2907",
+             "amount": 398.4, "po_reference": "on file", "cost_center": "G&A",
              "bank_details": "changed since last payment"},
-            {"id": 0, "vendor_name": "FastConsult LLC", "invoice_number": "INV-F-0042",
-             "amount": 45000, "po_reference": None, "cost_center": "Operations"},
+            {"vendor_name": "Marlow & Finch", "invoice_number": "REF-7731",
+             "amount": 2656.0, "po_reference": None, "cost_center": "Operations"}
         ]
 
     return f"""<!doctype html><html><head><meta charset="utf-8">
