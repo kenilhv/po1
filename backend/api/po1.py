@@ -14,6 +14,7 @@ from fastapi import APIRouter, BackgroundTasks, File, UploadFile
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
+from crew.privacy import redact_invoice, redaction_summary
 from crew.tools.ap_tools import revenue_summary
 from database.db import get_conn
 from integrations import band_client as band
@@ -77,6 +78,12 @@ def get_invoice(invoice_id: int) -> dict[str, Any]:
 def get_room(invoice_id: int) -> dict[str, Any]:
     """The Band agent room for one invoice — every handoff, in order."""
     return {"invoice_id": invoice_id, "messages": band.room_transcript(invoice_id)}
+
+
+@router.get("/po1/privacy")
+def get_privacy() -> dict[str, Any]:
+    """What outside reviewers never saw — a control, shown on the dashboard."""
+    return redaction_summary()
 
 
 @router.get("/po1/revenue")
@@ -238,26 +245,36 @@ def review_page(invoice_id: int) -> str:
         return f"<!doctype html><style>{_PAGE_CSS}</style><div class=w><h1>Invoice not found</h1></div>"
 
     inv, exc = dict(inv), dict(exc) if exc else {}
-    etype = (exc.get("exception_type") or "review").replace("_", " ")
-    amount = float(inv.get("amount") or 0)
+
+    # Reviewers are outside the company: they get a pseudonymised invoice with
+    # proportionally accurate figures, never the real commercial data.
+    safe = redact_invoice(inv, exc)
+
+    po_line = (
+        f"${safe['po_amount']:,.2f} agreed" if safe.get("po_amount") else "None on file"
+    )
 
     return f"""<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Review a payment — PO1</title><style>{_PAGE_CSS}</style></head><body><div class="w">
 <span class="pill">Payment review</span>
-<h1>Should this invoice be paid?</h1>
+<h1>Should this bill be paid?</h1>
 <p class="sub">An automated system flagged this payment and stopped. It needs a person to decide.
-There's no accounting knowledge required — use your judgment.</p>
+No accounting knowledge required — use your judgment.</p>
 
 <div class="card">
-  <div class="row"><span class="k">Vendor</span><span class="v">{inv.get('vendor_name') or '—'}</span></div>
-  <div class="row"><span class="k">Invoice</span><span class="v">{inv.get('invoice_number') or '—'}</span></div>
-  <div class="row"><span class="k">Amount</span><span class="v">${amount:,.2f}</span></div>
-  <div class="row"><span class="k">Purchase order</span><span class="v">{inv.get('po_reference') or 'None on file'}</span></div>
-  <div class="row"><span class="k">Category</span><span class="v">{inv.get('cost_center') or '—'}</span></div>
+  <div class="row"><span class="k">Supplier</span><span class="v">{safe['vendor']}</span></div>
+  <div class="row"><span class="k">They are billing</span><span class="v">${safe['amount']:,.2f}</span></div>
+  <div class="row"><span class="k">Amount agreed upfront</span><span class="v">{po_line}</span></div>
+  <div class="row"><span class="k">Category</span><span class="v">{safe['category']}</span></div>
+  <div class="row"><span class="k">Reference</span><span class="v">{safe['reference']}</span></div>
 </div>
 
-<div class="flag"><b>Why it was stopped</b>{exc.get('detail') or etype}</div>
+<div class="flag"><b>Why it was stopped</b>{safe.get('concern') or 'This payment needs a second opinion.'}</div>
+
+<p class="sub" style="font-size:12.5px;margin:-4px 0 14px">
+Supplier names are replaced with consistent stand-ins and amounts are scaled, so you see a
+true picture of the problem without any real company's private financial data.</p>
 
 <div class="card">
   <p style="margin:0 0 4px;font-weight:600">Your decision</p>

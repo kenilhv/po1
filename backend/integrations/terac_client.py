@@ -26,6 +26,7 @@ from typing import Any
 
 import requests
 
+from crew.privacy import redact_invoice
 from database.db import get_conn
 
 BASE_URL = os.getenv("TERAC_BASE_URL", "https://terac.com/api/external/v2")
@@ -96,10 +97,19 @@ def escalate_invoice(
     project_id = ensure_project()
     review_url = f"{PUBLIC_URL}/review/{invoice_id}"
 
+    # The opportunity description is public to the panel, so it carries the
+    # pseudonymised figures, never the company's real vendor or amounts.
+    safe = redact_invoice(context, {"exception_type": exception_type, "evidence": context})
+    public_question = (
+        f"A supplier billed ${safe['amount']:,.2f}. "
+        f"{safe.get('concern', 'This payment needs a second opinion.')} "
+        "Should it be paid, rejected, or checked further?"
+    )
+
     body = {
         "title": f"AP exception review: {exception_type.replace('_', ' ')}",
         "internal_title": f"PO1 invoice #{invoice_id} — {exception_type}",
-        "description": question,
+        "description": public_question,
         "project_id": project_id,
         "num_participants": num_reviewers,
         "business_type": "b2c",
@@ -112,7 +122,7 @@ def escalate_invoice(
                 "review_type": "auto_approve",
                 "task_url": review_url,
                 "title": "Review this accounts-payable exception",
-                "description": question,
+                "description": public_question,
                 "duration_minutes": 5,
             }
         ],
@@ -155,7 +165,7 @@ def record_verdict(
     opportunity_id: str,
     verdict: str,
     reasoning: str,
-    cost: float = 15.0,
+    cost: float = 1.0,
 ) -> None:
     """Write the human's decision back so the pipeline can act and audit it."""
     with get_conn() as conn:

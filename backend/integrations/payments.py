@@ -27,7 +27,7 @@ STRIPE_KEY = os.getenv("STRIPE_RESTRICTED_KEY", "")  # rk_test_... read-only
 PAYMENT_LINK = os.getenv("STRIPE_PAYMENT_LINK", "")
 
 SUBSCRIPTION_PRICE = float(os.getenv("PO1_SUBSCRIPTION_PRICE", "299"))
-ESCALATION_FEE = float(os.getenv("PO1_ESCALATION_FEE", "15"))
+ESCALATION_FEE = float(os.getenv("PO1_ESCALATION_FEE", "1"))
 
 
 def is_configured() -> bool:

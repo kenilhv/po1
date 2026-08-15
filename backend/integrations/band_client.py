@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+from pathlib import Path
 from typing import Any
 
 import requests
@@ -37,6 +38,25 @@ TIMEOUT = 20
 # unreachable mid-demo. Band remains the source of truth when configured.
 _local_room: dict[str, list[dict[str, Any]]] = {}
 
+# Each PO1 agent can hold its own Band identity, so the room reads like a floor
+# of specialists rather than one narrator. Populated by
+# scripts/register_all_agents.py; falls back to the orchestrator's key.
+_REGISTRY_PATH = Path(__file__).resolve().parent.parent / "band_agents.json"
+try:
+    _REGISTRY: dict[str, dict[str, str]] = json.loads(_REGISTRY_PATH.read_text())
+except (OSError, ValueError):
+    _REGISTRY = {}
+
+
+def agent_key_for(agent: str) -> str:
+    """The posting identity for one agent, or the orchestrator's if unregistered."""
+    entry = _REGISTRY.get(agent) or {}
+    return entry.get("api_key") or AGENT_KEY or API_KEY
+
+
+def registered_agents() -> list[str]:
+    return sorted(_REGISTRY)
+
 
 def is_configured() -> bool:
     return bool((AGENT_KEY or API_KEY) and CHAT_ID)
@@ -49,9 +69,10 @@ def _mentions() -> list[dict[str, str]]:
     return [{"handle": handle}] if handle else []
 
 
-def _headers() -> dict[str, str]:
+def _headers(agent: str | None = None) -> dict[str, str]:
     # Band's agent API authenticates with X-API-Key, not a Bearer token.
-    return {"X-API-Key": AGENT_KEY or API_KEY, "Content-Type": "application/json"}
+    key = agent_key_for(agent) if agent else (AGENT_KEY or API_KEY)
+    return {"X-API-Key": key, "Content-Type": "application/json"}
 
 
 def post_finding(invoice_id: int, agent: str, finding: dict[str, Any]) -> None:
@@ -66,15 +87,18 @@ def post_finding(invoice_id: int, agent: str, finding: dict[str, Any]) -> None:
     try:
         # Band requires message.content plus a mentions array of identifier
         # objects; a bare string is rejected and an empty array is not delivered.
+        own_identity = agent in _REGISTRY
+        # An agent with its own Band identity signs its own finding; without one
+        # the orchestrator relays it and names the author inline.
+        content = (
+            f"[invoice {invoice_id}] {summary}"
+            if own_identity
+            else f"[invoice {invoice_id}] {agent} — {summary}"
+        )
         requests.post(
             f"{BASE_URL}/agent/chats/{CHAT_ID}/messages",
-            headers=_headers(),
-            json={
-                "message": {
-                    "content": f"[invoice {invoice_id}] {agent} — {summary}",
-                    "mentions": _mentions(),
-                }
-            },
+            headers=_headers(agent),
+            json={"message": {"content": content, "mentions": _mentions()}},
             timeout=TIMEOUT,
         )
     except requests.RequestException:
