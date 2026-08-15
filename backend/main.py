@@ -18,6 +18,7 @@ load_dotenv(ROOT / ".env")
 from api.ap import router as ap_router
 from api.auth import router as auth_router
 from api.cfo import router as cfo_router
+from api.dashboard import router as dashboard_router
 from api.po1 import router as po1_router
 from api.ws import router as ws_router
 from database.db import get_conn, init_db
@@ -52,6 +53,7 @@ app.include_router(ws_router, prefix="/v1")
 
 # PO1 — AP pipeline, human task pages, revenue
 app.include_router(po1_router)
+app.include_router(dashboard_router)
 
 UPLOAD_DIR = ROOT / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)

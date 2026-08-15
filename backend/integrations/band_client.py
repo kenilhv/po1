@@ -25,9 +25,11 @@ from typing import Any
 
 import requests
 
-BASE_URL = os.getenv("BAND_BASE_URL", "https://api.band.ai/api/v1")
+BASE_URL = os.getenv("BAND_BASE_URL", "https://app.band.ai/api/v1")
 API_KEY = os.getenv("BAND_API_KEY", "")
 AGENT_ID = os.getenv("BAND_AGENT_ID", "")
+# Register-only human key mints this; only the agent key can post messages.
+AGENT_KEY = os.getenv("BAND_AGENT_API_KEY", "")
 CHAT_ID = os.getenv("BAND_CHAT_ID", "")
 TIMEOUT = 20
 
@@ -37,11 +39,12 @@ _local_room: dict[str, list[dict[str, Any]]] = {}
 
 
 def is_configured() -> bool:
-    return bool(API_KEY and CHAT_ID)
+    return bool((AGENT_KEY or API_KEY) and CHAT_ID)
 
 
 def _headers() -> dict[str, str]:
-    return {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+    # Band's agent API authenticates with X-API-Key, not a Bearer token.
+    return {"X-API-Key": AGENT_KEY or API_KEY, "Content-Type": "application/json"}
 
 
 def post_finding(invoice_id: int, agent: str, finding: dict[str, Any]) -> None:
