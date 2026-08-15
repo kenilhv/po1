@@ -1,0 +1,142 @@
+[
+  {
+    "file": "01-low-officesupply.pdf",
+    "expected": {
+      "risk": "LOW",
+      "decision": "AUTO_APPROVED"
+    },
+    "actual": {
+      "risk": "LOW",
+      "decision": "AUTO_APPROVED",
+      "amount": 800.0,
+      "vendor": "OfficeSupplyCo"
+    },
+    "pass": true
+  },
+  {
+    "file": "02-low-cleanvendor.pdf",
+    "expected": {
+      "risk": "LOW",
+      "decision": "AUTO_APPROVED"
+    },
+    "actual": {
+      "risk": "LOW",
+      "decision": "AUTO_APPROVED",
+      "amount": 475.0,
+      "vendor": "CleanVendor Inc"
+    },
+    "pass": true
+  },
+  {
+    "file": "03-low-paperworks.pdf",
+    "expected": {
+      "risk": "LOW",
+      "decision": "AUTO_APPROVED"
+    },
+    "actual": {
+      "risk": "LOW",
+      "decision": "AUTO_APPROVED",
+      "amount": 375.0,
+      "vendor": "PaperWorks Ltd"
+    },
+    "pass": true
+  },
+  {
+    "file": "04-low-techsoftware.pdf",
+    "expected": {
+      "risk": "LOW",
+      "decision": "AUTO_APPROVED"
+    },
+    "actual": {
+      "risk": "LOW",
+      "decision": "AUTO_APPROVED",
+      "amount": 3500.0,
+      "vendor": "TechSoftware Inc"
+    },
+    "pass": true
+  },
+  {
+    "file": "05-high-duplicate.pdf",
+    "expected": {
+      "risk": "HIGH",
+      "decision": "PENDING_CFO"
+    },
+    "actual": {
+      "risk": "HIGH",
+      "decision": "PENDING_CFO",
+      "amount": 1200.0,
+      "vendor": "TechSoftware Inc"
+    },
+    "pass": true
+  },
+  {
+    "file": "06-medium-no-po.pdf",
+    "expected": {
+      "risk": "MEDIUM",
+      "decision": "PENDING_AP"
+    },
+    "actual": {
+      "risk": "MEDIUM",
+      "decision": "PENDING_AP",
+      "amount": 325.0,
+      "vendor": "PaperWorks Ltd"
+    },
+    "pass": true
+  },
+  {
+    "file": "07-critical-fraud.pdf",
+    "expected": {
+      "risk": "CRITICAL",
+      "decision": "BLOCKED"
+    },
+    "actual": {
+      "risk": "CRITICAL",
+      "decision": "BLOCKED",
+      "amount": 45000.0,
+      "vendor": "FastConsult LLC"
+    },
+    "pass": true
+  },
+  {
+    "file": "08-critical-unknown-vendor.pdf",
+    "expected": {
+      "risk": "CRITICAL",
+      "decision": "BLOCKED"
+    },
+    "actual": {
+      "risk": "CRITICAL",
+      "decision": "BLOCKED",
+      "amount": 3200.0,
+      "vendor": "ApexShell Corp"
+    },
+    "pass": true
+  },
+  {
+    "file": "09-critical-large-no-po.pdf",
+    "expected": {
+      "risk": "CRITICAL",
+      "decision": "BLOCKED"
+    },
+    "actual": {
+      "risk": "CRITICAL",
+      "decision": "BLOCKED",
+      "amount": 18500.0,
+      "vendor": "OfficeSupplyCo"
+    },
+    "pass": true
+  },
+  {
+    "file": "10-medium-bank-mismatch.pdf",
+    "expected": {
+      "risk": "MEDIUM",
+      "decision": "PENDING_AP"
+    },
+    "actual": {
+      "risk": "MEDIUM",
+      "decision": "PENDING_AP",
+      "amount": 480.0,
+      "vendor": "CleanVendor Inc"
+    },
+    "pass": true
+  }
+]
