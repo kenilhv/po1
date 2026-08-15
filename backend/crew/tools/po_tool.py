@@ -25,23 +25,47 @@ def lookup_po(vendor_name: str, po_reference: str | None) -> dict:
 
 
 def lookup_duplicate(vendor_name: str, amount: float, invoice_number: str) -> dict:
+    """Detect a re-submitted invoice.
+
+    Matching on amount alone produces false positives — recurring vendors bill
+    identical amounts every month by design. Only a repeated *invoice number*
+    is conclusive; a matching amount is a soft signal that informs severity
+    without blocking payment on its own.
+    """
     with get_conn() as conn:
-        rows = conn.execute(
+        if invoice_number:
+            exact = conn.execute(
+                "SELECT invoice_number, vendor_name, amount FROM payments "
+                "WHERE vendor_name = ? AND invoice_number = ?",
+                (vendor_name, invoice_number),
+            ).fetchone()
+            if exact:
+                return {
+                    "duplicate": True,
+                    "confidence": "exact",
+                    "matches": [dict(exact)],
+                    "detail": f"Invoice {invoice_number} was already paid to {vendor_name}",
+                }
+
+        similar = conn.execute(
             """
             SELECT invoice_number, vendor_name, amount FROM payments
             WHERE vendor_name = ? AND ABS(amount - ?) < 1
             """,
             (vendor_name, amount),
         ).fetchall()
-        if rows:
-            return {
-                "duplicate": True,
-                "matches": [dict(r) for r in rows],
-                "detail": f"Similar payment exists for {vendor_name} ${amount}",
-            }
-        if "9891" in (invoice_number or ""):
-            return {"duplicate": True, "detail": "References paid invoice INV-9891"}
-    return {"duplicate": False}
+
+    if similar:
+        return {
+            "duplicate": False,
+            "similar_amount": True,
+            "matches": [dict(r) for r in similar],
+            "detail": (
+                f"${amount:,.2f} matches {len(similar)} prior payment(s) to {vendor_name}, "
+                "but under a different invoice number — likely a recurring charge"
+            ),
+        }
+    return {"duplicate": False, "detail": "No prior payment matches this invoice"}
 
 
 def lookup_vendor(vendor_name: str, bank_details: str | None) -> dict:
