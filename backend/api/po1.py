@@ -145,6 +145,43 @@ async def process(background_tasks: BackgroundTasks, file: UploadFile = File(...
     return {"invoice_id": invoice_id, "status": "processing"}
 
 
+@router.post("/po1/demo")
+async def run_demo(background_tasks: BackgroundTasks) -> dict[str, Any]:
+    """Process the bundled sample invoices through the full pipeline.
+
+    Gives the deployed instance real state to show without needing anyone to
+    upload a file by hand, which matters because Render starts each deploy on
+    an empty disk.
+    """
+    from pathlib import Path as _Path
+
+    from main import run_po1_pipeline
+
+    samples_dir = _Path(__file__).resolve().parent.parent.parent / "sample_invoices"
+    wanted = [
+        "01-low-officesupply.pdf",     # clean, auto-pays with a discount captured
+        "02-low-cleanvendor.pdf",      # banking change -> blocked
+        "06-medium-no-po.pdf",         # unauthorised spend
+        "08-critical-unknown-vendor.pdf",  # no tax ID -> escalates to a human
+    ]
+
+    started: list[dict[str, Any]] = []
+    for name in wanted:
+        pdf = samples_dir / name
+        if not pdf.exists():
+            continue
+        with get_conn() as conn:
+            cur = conn.execute(
+                "INSERT INTO invoices (filename, status) VALUES (?, 'processing')", (name,)
+            )
+            conn.commit()
+            invoice_id = int(cur.lastrowid)
+        background_tasks.add_task(run_po1_pipeline, invoice_id, str(pdf))
+        started.append({"invoice_id": invoice_id, "file": name})
+
+    return {"started": started, "count": len(started)}
+
+
 # ----------------------------------------------------- human verdict (Terac)
 
 @router.post("/po1/review/{invoice_id}")

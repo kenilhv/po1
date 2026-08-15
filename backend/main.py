@@ -153,7 +153,24 @@ def health() -> dict[str, Any]:
 
 @app.on_event("startup")
 def startup() -> None:
+    """Bring the database up, and seed reference data if this is a fresh disk.
+
+    Render's filesystem is ephemeral, so a redeploy starts with an empty
+    database. Seeding the vendor master, purchase orders and goods receipts on
+    boot means the deployed instance is always ready to process an invoice
+    rather than silently matching against nothing.
+    """
     init_db()
+    try:
+        with get_conn() as conn:
+            vendors = conn.execute("SELECT COUNT(*) AS n FROM vendors").fetchone()["n"]
+        if not vendors:
+            from database.seed_ap import seed
+
+            seed()
+            print("startup: seeded vendor master, POs and goods receipts")
+    except Exception as exc:  # never let seeding block the service
+        print(f"startup: seed skipped ({exc})")
 
 
 @app.post("/invoice/upload")
