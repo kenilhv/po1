@@ -22,7 +22,7 @@ from typing import Any
 
 import requests
 
-BASE_URL = os.getenv("LINQ_BASE_URL", "https://api.linqapp.com/v1")
+BASE_URL = os.getenv("LINQ_BASE_URL", "https://api.linqapp.com/api/partner/v3")
 API_KEY = os.getenv("LINQ_API_KEY", "")
 FROM_NUMBER = os.getenv("LINQ_PHONE_NUMBER", "")
 FOUNDER_NUMBER = os.getenv("FOUNDER_PHONE", "")
@@ -46,15 +46,32 @@ def _send(to: str, text: str, card: dict[str, Any] | None = None) -> dict[str, A
     if not is_configured() or not to:
         return {"sent": False, "reason": "not_configured", **entry}
 
-    payload: dict[str, Any] = {"from": FROM_NUMBER, "to": to, "text": text}
-    if card:
-        payload["imessage_app"] = card
+    def _post(parts: list[dict[str, Any]]):
+        return requests.post(
+            f"{BASE_URL}/chats",
+            headers=_headers(),
+            json={"from": FROM_NUMBER, "to": [to], "message": {"parts": parts}},
+            timeout=TIMEOUT,
+        )
 
     try:
-        resp = requests.post(
-            f"{BASE_URL}/messages", headers=_headers(), json=payload, timeout=TIMEOUT
-        )
-        return {"sent": resp.status_code < 400, "status": resp.status_code, **entry}
+        resp = _post([{"type": "text", "value": text}])
+        ok = resp.status_code < 400
+        entry["status"] = resp.status_code
+        if not ok:
+            # Sandbox is inbound-first: the recipient must text the Linq number
+            # before an agent may message them.
+            entry["error"] = resp.text[:200]
+
+        # An imessage_app part must be the only part in its message, so the
+        # interactive card goes out as a second message right after the text.
+        if ok and card:
+            try:
+                _post([{"type": "imessage_app", "value": card}])
+            except requests.RequestException:
+                pass
+
+        return {"sent": ok, **entry}
     except requests.RequestException as exc:
         return {"sent": False, "error": str(exc)[:200], **entry}
 
