@@ -1,0 +1,48 @@
+{
+  "service": "invoice-os-mcp",
+  "mcp_server": {
+    "transport": "sse",
+    "url_template": "http://{KENIL_IP}:8001/sse",
+    "start_command": "cd backend && .venv\\Scripts\\python -m invoice_mcp.server --port 8001"
+  },
+  "tools": [
+    {
+      "name": "lookup_purchase_order",
+      "agents": ["po_matcher"],
+      "tier": "L1",
+      "guardrail": "read-only"
+    },
+    {
+      "name": "check_duplicate_payment",
+      "agents": ["duplicate_detector"],
+      "tier": "L1",
+      "guardrail": "read-only"
+    },
+    {
+      "name": "check_vendor_fraud_signals",
+      "agents": ["fraud_signal"],
+      "tier": "L2",
+      "guardrail": "read-only"
+    },
+    {
+      "name": "submit_payment",
+      "agents": ["approval_router"],
+      "tier": "L3",
+      "guardrail": "BLOCK always unless header X-Approval-Token set by human"
+    },
+    {
+      "name": "write_audit_log",
+      "agents": ["approval_router"],
+      "tier": "L3",
+      "guardrail": "allow"
+    }
+  ],
+  "agents": [
+    {"id": "invoice_parser", "tier": "L1", "model": "cheap", "tools": []},
+    {"id": "po_matcher", "tier": "L1", "model": "cheap", "tools": ["lookup_purchase_order"]},
+    {"id": "duplicate_detector", "tier": "L1", "model": "cheap", "tools": ["check_duplicate_payment"]},
+    {"id": "fraud_signal", "tier": "L2", "model": "expensive", "tools": ["check_vendor_fraud_signals"]},
+    {"id": "risk_scorer", "tier": "L2", "model": "expensive", "tools": []},
+    {"id": "approval_router", "tier": "L3", "model": "cheap", "tools": ["write_audit_log"], "blocked_tools": ["submit_payment"]}
+  ]
+}
