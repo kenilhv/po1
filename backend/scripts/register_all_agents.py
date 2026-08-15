@@ -33,33 +33,33 @@ OUT = ROOT / "band_agents.json"
 
 # The orchestrator is already registered; these are its colleagues on the floor.
 AGENTS = [
-    ("vendor_onboarder", "Vendor Onboarder",
+    ("vendor_onboarder", "PO1 Vendor Onboarder",
      "Gates every invoice on vendor master data: verifies the W-9 and tax ID are on file "
      "and flags any change to a known vendor's banking details."),
-    ("invoice_parser", "Invoice Parser",
+    ("invoice_parser", "PO1 Invoice Parser",
      "Extracts vendor, amount, invoice number, PO reference and payment terms from the raw document."),
-    ("three_way_matcher", "Three-Way Matcher",
+    ("three_way_matcher", "PO1 Three-Way Matcher",
      "Compares the invoice against both the purchase order and the goods receipt, "
      "reporting which of the three legs agree."),
-    ("duplicate_detector", "Duplicate Detector",
+    ("duplicate_detector", "PO1 Duplicate Detector",
      "Checks payment history for an invoice number already paid to this vendor."),
-    ("fraud_signal", "Fraud Signal",
+    ("fraud_signal", "PO1 Fraud Signal",
      "Screens vendor and banking signals for indicators that a payment should not go out."),
-    ("gl_coder", "GL Coder",
+    ("gl_coder", "PO1 GL Coder",
      "Assigns the general-ledger account and cost centre so spend can be checked against budget."),
-    ("exception_classifier", "Exception Classifier",
+    ("exception_classifier", "PO1 Exception Classifier",
      "Reads every upstream finding and names one typed exception with the team that owns "
      "resolving it, rather than a single blended risk score."),
-    ("risk_scorer", "Risk Scorer",
+    ("risk_scorer", "PO1 Risk Scorer",
      "Scores the severity of a typed exception given the amount, the vendor's history "
      "and the size of any variance."),
-    ("approval_router", "Approval Router",
+    ("approval_router", "PO1 Approval Router",
      "Applies delegation-of-authority limits and decides whether the agent may clear a "
      "payment alone, or must buy human judgment."),
-    ("payment_scheduler", "Payment Scheduler",
+    ("payment_scheduler", "PO1 Payment Scheduler",
      "Times payment to capture early-payment discounts instead of paying the instant an "
      "invoice clears."),
-    ("controller", "Controller",
+    ("controller", "PO1 Controller",
      "The specialist pulled into a case at runtime when a vendor's banking details change. "
      "Banking changes are never self-approved."),
 ]
@@ -75,7 +75,16 @@ def register(name: str, description: str) -> dict | None:
     if r.status_code >= 400:
         print(f"  FAILED {name}: {r.status_code} {r.text[:200]}")
         return None
-    return r.json().get("data") or r.json()
+    # Band returns {data: {credentials: {api_key}, agent: {id, name, ...}}}
+    # and the key is shown exactly once, so flatten it here.
+    data = r.json().get("data") or {}
+    agent = data.get("agent") or {}
+    return {
+        "id": agent.get("id"),
+        "api_key": (data.get("credentials") or {}).get("api_key"),
+        "handle": agent.get("handle"),
+        "name": agent.get("name") or name,
+    }
 
 
 def main() -> None:
@@ -96,13 +105,11 @@ def main() -> None:
         data = register(name, desc)
         if not data:
             continue
-        registry[slug] = {
-            "id": data.get("id"),
-            "api_key": data.get("api_key") or data.get("agent_api_key"),
-            "handle": data.get("handle"),
-            "name": name,
-        }
-        print(f"  registered {slug:22} {data.get('handle', '')}")
+        if not data.get("api_key"):
+            print(f"  FAILED {slug}: no api_key in response")
+            continue
+        registry[slug] = data
+        print(f"  registered {slug:22} key ok  id={str(data.get('id'))[:8]}")
         OUT.write_text(json.dumps(registry, indent=2))
 
     print(f"\n{len(registry)} agents in {OUT}")
