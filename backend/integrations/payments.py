@@ -24,23 +24,77 @@ from crew.tools.ap_tools import record_payment, record_revenue
 
 STRIPE_API = "https://api.stripe.com/v1"
 STRIPE_KEY = os.getenv("STRIPE_RESTRICTED_KEY", "")  # rk_test_... read-only
-PAYMENT_LINK = os.getenv("STRIPE_PAYMENT_LINK", "")
+SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")      # sk_test_... can create
+PAYMENT_LINK = os.getenv("STRIPE_PAYMENT_LINK", "")  # static fallback
 
 SUBSCRIPTION_PRICE = float(os.getenv("PO1_SUBSCRIPTION_PRICE", "299"))
 ESCALATION_FEE = float(os.getenv("PO1_ESCALATION_FEE", "1"))
 
 
 def is_configured() -> bool:
-    return bool(PAYMENT_LINK)
+    return bool(PAYMENT_LINK or SECRET_KEY)
+
+
+def can_create_links() -> bool:
+    """Whether the agent can mint its own checkout, rather than reusing one link."""
+    return bool(SECRET_KEY)
+
+
+def create_payment_link(amount: float, description: str) -> dict[str, Any]:
+    """Mint a Stripe Payment Link for one specific charge.
+
+    A single fixed link cannot represent both a $299 subscription and a $1
+    metered fee, so the agent creates the exact charge it decided on. Falls
+    back to the static link when no secret key is configured.
+    """
+    if not SECRET_KEY:
+        return {"url": PAYMENT_LINK, "amount": amount, "dynamic": False}
+
+    auth = {"Authorization": f"Bearer {SECRET_KEY}"}
+    try:
+        price = requests.post(
+            f"{STRIPE_API}/prices",
+            headers=auth,
+            data={
+                "unit_amount": int(round(amount * 100)),
+                "currency": "usd",
+                "product_data[name]": description[:250],
+            },
+            timeout=25,
+        )
+        if price.status_code >= 400:
+            return {"url": PAYMENT_LINK, "amount": amount, "dynamic": False,
+                    "error": price.text[:200]}
+
+        link = requests.post(
+            f"{STRIPE_API}/payment_links",
+            headers=auth,
+            data={
+                "line_items[0][price]": price.json()["id"],
+                "line_items[0][quantity]": 1,
+            },
+            timeout=25,
+        )
+        if link.status_code >= 400:
+            return {"url": PAYMENT_LINK, "amount": amount, "dynamic": False,
+                    "error": link.text[:200]}
+
+        return {"url": link.json()["url"], "amount": amount, "dynamic": True,
+                "link_id": link.json()["id"]}
+    except requests.RequestException as exc:
+        return {"url": PAYMENT_LINK, "amount": amount, "dynamic": False,
+                "error": str(exc)[:200]}
 
 
 # ------------------------------------------------------------------ inbound
 
 def subscription_checkout(customer_ref: str) -> dict[str, Any]:
-    """The agent's own sale: hand a prospective customer the payment link."""
+    """The agent's own sale: mint a checkout for the monthly subscription."""
     record_revenue("subscription_offered", SUBSCRIPTION_PRICE, customer_ref)
+    link = create_payment_link(SUBSCRIPTION_PRICE, "PO1 — autonomous accounts payable, monthly")
     return {
-        "url": PAYMENT_LINK,
+        "url": link["url"],
+        "dynamic": link.get("dynamic", False),
         "amount": SUBSCRIPTION_PRICE,
         "kind": "subscription",
         "message": (
@@ -54,8 +108,13 @@ def subscription_checkout(customer_ref: str) -> dict[str, Any]:
 def escalation_charge(customer_ref: str, invoice_id: int, exception_type: str) -> dict[str, Any]:
     """Metered fee — the customer pays only for judgment actually consumed."""
     record_revenue("escalation_fee", ESCALATION_FEE, customer_ref)
+    link = create_payment_link(
+        ESCALATION_FEE,
+        f"PO1 — expert review of a {exception_type.replace('_', ' ')} on invoice #{invoice_id}",
+    )
     return {
-        "url": PAYMENT_LINK,
+        "url": link["url"],
+        "dynamic": link.get("dynamic", False),
         "amount": ESCALATION_FEE,
         "kind": "escalation_fee",
         "invoice_id": invoice_id,
