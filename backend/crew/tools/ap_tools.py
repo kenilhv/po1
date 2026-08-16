@@ -13,7 +13,7 @@ def lookup_vendor_record(vendor_name: str) -> dict[str, Any] | None:
     """Fetch the vendor master record — the basis for every onboarding check."""
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT * FROM vendors WHERE vendor_name = ?", (vendor_name,)
+            "SELECT * FROM vendors WHERE vendor_name = ? COLLATE NOCASE", (vendor_name,)
         ).fetchone()
         return dict(row) if row else None
 
@@ -28,7 +28,7 @@ def lookup_goods_receipt(vendor_name: str, po_reference: str | None) -> dict[str
             ).fetchone()
         if row is None and vendor_name:
             row = conn.execute(
-                "SELECT * FROM goods_receipts WHERE vendor_name = ? ORDER BY received_at DESC LIMIT 1",
+                "SELECT * FROM goods_receipts WHERE vendor_name = ? COLLATE NOCASE ORDER BY received_at DESC LIMIT 1",
                 (vendor_name,),
             ).fetchone()
 
@@ -119,7 +119,7 @@ def upsert_vendor_bank(vendor_name: str, bank_account: str) -> None:
     """Record an accepted banking change, preserving the prior value."""
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT bank_account FROM vendors WHERE vendor_name = ?", (vendor_name,)
+            "SELECT bank_account FROM vendors WHERE vendor_name = ? COLLATE NOCASE", (vendor_name,)
         ).fetchone()
         now = datetime.utcnow().isoformat()
         if row:
@@ -127,7 +127,7 @@ def upsert_vendor_bank(vendor_name: str, bank_account: str) -> None:
                 """
                 UPDATE vendors
                 SET previous_bank_account = ?, bank_account = ?, bank_details_changed_at = ?
-                WHERE vendor_name = ?
+                WHERE vendor_name = ? COLLATE NOCASE
                 """,
                 (row["bank_account"], bank_account, now, vendor_name),
             )

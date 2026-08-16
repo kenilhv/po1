@@ -8,7 +8,7 @@ def lookup_po(vendor_name: str, po_reference: str | None) -> dict:
     with get_conn() as conn:
         if po_ref:
             row = conn.execute(
-                "SELECT * FROM purchase_orders WHERE po_number = ? AND vendor_name = ?",
+                "SELECT * FROM purchase_orders WHERE po_number = ? AND vendor_name = ? COLLATE NOCASE",
                 (po_ref, vendor_name),
             ).fetchone()
             if row:
@@ -16,7 +16,7 @@ def lookup_po(vendor_name: str, po_reference: str | None) -> dict:
             return {"match": False, "detail": f"PO {po_ref} not found for vendor {vendor_name}"}
         if vendor_name:
             row = conn.execute(
-                "SELECT * FROM purchase_orders WHERE vendor_name = ?",
+                "SELECT * FROM purchase_orders WHERE vendor_name = ? COLLATE NOCASE",
                 (vendor_name,),
             ).fetchone()
             if row:
@@ -36,7 +36,7 @@ def lookup_duplicate(vendor_name: str, amount: float, invoice_number: str) -> di
         if invoice_number:
             exact = conn.execute(
                 "SELECT invoice_number, vendor_name, amount FROM payments "
-                "WHERE vendor_name = ? AND invoice_number = ?",
+                "WHERE vendor_name = ? COLLATE NOCASE AND invoice_number = ?",
                 (vendor_name, invoice_number),
             ).fetchone()
             if exact:
@@ -50,7 +50,7 @@ def lookup_duplicate(vendor_name: str, amount: float, invoice_number: str) -> di
         similar = conn.execute(
             """
             SELECT invoice_number, vendor_name, amount FROM payments
-            WHERE vendor_name = ? AND ABS(amount - ?) < 1
+            WHERE vendor_name = ? COLLATE NOCASE AND ABS(amount - ?) < 1
             """,
             (vendor_name, amount),
         ).fetchall()
@@ -71,7 +71,7 @@ def lookup_duplicate(vendor_name: str, amount: float, invoice_number: str) -> di
 def lookup_vendor(vendor_name: str, bank_details: str | None) -> dict:
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT * FROM vendors WHERE vendor_name = ?",
+            "SELECT * FROM vendors WHERE vendor_name = ? COLLATE NOCASE",
             (vendor_name,),
         ).fetchone()
         if not row:

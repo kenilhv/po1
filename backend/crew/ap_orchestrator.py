@@ -81,16 +81,31 @@ async def run_ap_pipeline(invoice_id: int, pdf_path: str, on_agent: OnAgent) -> 
     text = extract_pdf_text(pdf_path)
 
     # ---------------------------------------------------- 2. invoice_parser
+    def _parse() -> dict:
+        # GLiNER2 (Fastino, served on Pioneer) does schema extraction in one
+        # encoder pass; the regex rules remain as offline fallback and fill
+        # any field the model missed.
+        from integrations.pioneer_client import gliner_parse_invoice
+
+        extracted = gliner_parse_invoice(text)
+        fallback = parse_invoice_rules(text)
+        merged = {**fallback, **{k: v for k, v in extracted.items() if v}}
+        return merged
+
     parsed = await _step(
         on_agent,
         invoice_id,
         "invoice_parser",
-        "Extracting fields from the document",
-        lambda: parse_invoice_rules(text),
+        "Extracting fields with GLiNER2",
+        _parse,
         lambda r: {
             "result": "parsed",
-            "detail": f"{r.get('vendor_name') or 'Unknown vendor'} — ${float(r.get('amount') or 0):,.2f}",
-            "confidence": 0.9,
+            "detail": (
+                f"{r.get('vendor_name') or 'Unknown vendor'} — ${float(r.get('amount') or 0):,.2f}"
+                + (" (GLiNER2)" if r.get("_extractor") else " (rules)")
+            ),
+            "confidence": 0.95 if r.get("_extractor") else 0.8,
+            "model_used": r.get("_extractor") or "rules",
         },
     )
 

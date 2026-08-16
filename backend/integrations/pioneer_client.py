@@ -226,3 +226,65 @@ def latest_run() -> dict[str, Any] | None:
             "SELECT * FROM finetune_runs ORDER BY id DESC LIMIT 1"
         ).fetchone()
     return dict(row) if row else None
+
+
+# ------------------------------------------------- GLiNER2 structured extraction
+
+GLINER_MODEL = os.getenv("PIONEER_GLINER_MODEL", "fastino/gliner2-large-v1")
+
+_ENTITY_MAP = {
+    "vendor name": "vendor_name",
+    "invoice number": "invoice_number",
+    "total amount": "amount",
+    "purchase order reference": "po_reference",
+    "payment terms": "payment_terms",
+    "bank account": "bank_details",
+    "invoice date": "invoice_date",
+}
+
+
+def gliner_parse_invoice(text: str) -> dict[str, Any]:
+    """Extract structured invoice fields with Fastino's GLiNER2 via Pioneer.
+
+    One encoder forward pass, no prompt, no generation — the right tool for
+    schema extraction, and cheaper and faster than a decoder LLM for this job.
+    Returns {} on any failure so the caller can fall back to rules.
+    """
+    if not API_KEY:
+        return {}
+    try:
+        resp = requests.post(
+            f"{BASE}/inference",
+            headers=_headers(),
+            json={
+                "model_id": GLINER_MODEL,
+                "text": text[:4000],
+                "schema": {"entities": list(_ENTITY_MAP)},
+                "threshold": 0.3,
+            },
+            timeout=45,
+        )
+        if resp.status_code >= 400:
+            return {}
+        entities = (
+            (resp.json().get("result") or {}).get("data") or {}
+        ).get("entities") or {}
+
+        out: dict[str, Any] = {}
+        for label, field in _ENTITY_MAP.items():
+            hits = entities.get(label) or []
+            if not hits:
+                continue
+            best = max(hits, key=lambda h: h.get("confidence", 0))
+            out[field] = best.get("text")
+
+        if out.get("amount"):
+            import re as _re
+
+            m = _re.search(r"[\d,]+(?:\.\d+)?", str(out["amount"]))
+            out["amount"] = float(m.group().replace(",", "")) if m else None
+
+        out["_extractor"] = GLINER_MODEL
+        return out
+    except (requests.RequestException, ValueError, KeyError):
+        return {}
