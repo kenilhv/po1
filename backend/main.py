@@ -169,6 +169,16 @@ def startup() -> None:
 
             seed()
             print("startup: seeded vendor master, POs and goods receipts")
+        with get_conn() as conn:
+            subs = conn.execute(
+                "SELECT COUNT(*) AS n FROM revenue_events WHERE kind = 'subscription'"
+            ).fetchone()["n"]
+        if not subs:
+            # One org is subscribed (the demo customer — its $299 is confirmed
+            # in Stripe); the internal ledger must survive a redeploy too.
+            from crew.tools.ap_tools import record_revenue
+
+            record_revenue("subscription", 299.0, "demo-customer")
     except Exception as exc:  # never let seeding block the service
         print(f"startup: seed skipped ({exc})")
 

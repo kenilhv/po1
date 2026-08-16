@@ -48,6 +48,16 @@ except (OSError, ValueError):
     _REGISTRY = {}
 
 
+def reload_registry() -> int:
+    """Re-read band_agents.json after a runtime install."""
+    global _REGISTRY
+    try:
+        _REGISTRY = json.loads(_REGISTRY_PATH.read_text())
+    except (OSError, ValueError):
+        _REGISTRY = {}
+    return len(_REGISTRY)
+
+
 def agent_key_for(agent: str) -> str:
     """The posting identity for one agent, or the orchestrator's if unregistered."""
     entry = _REGISTRY.get(agent) or {}

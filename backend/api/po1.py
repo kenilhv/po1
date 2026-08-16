@@ -113,6 +113,52 @@ def get_messages() -> list[dict[str, Any]]:
     return linq.transcript()
 
 
+@router.post("/po1/band/registry")
+def upload_band_registry(body: dict[str, Any]) -> dict[str, Any]:
+    """Install the per-agent Band identities on this instance.
+
+    band_agents.json holds minted keys, so it is gitignored and never reaches a
+    deploy; this pushes it at runtime. Guarded by the orchestrator's own key,
+    which only the operator and the deploy environment hold.
+    """
+    import json as _json
+    import os as _os
+    from pathlib import Path as _Path
+
+    if body.get("auth") != _os.getenv("BAND_AGENT_API_KEY", ""):
+        return {"error": "unauthorized"}
+    agents = body.get("agents") or {}
+    path = _Path(__file__).resolve().parent.parent / "band_agents.json"
+    path.write_text(_json.dumps(agents, indent=2))
+    band.reload_registry()
+    return {"installed": len(agents)}
+
+
+@router.post("/po1/linq/inbound")
+def linq_inbound(body: dict[str, Any]) -> dict[str, Any]:
+    """Receive a vendor's reply from Linq's webhook.
+
+    A tapback or YES confirms a queried variance; NO / a dispute flags it back
+    to the exception queue. Everything lands in the wires feed and the room.
+    """
+    frm = str(body.get("from") or (body.get("message") or {}).get("from") or "")
+    text = str(
+        body.get("text")
+        or (body.get("message") or {}).get("text")
+        or body.get("reaction")
+        or ""
+    ).strip()
+    linq.record_inbound(frm, text)
+    verdict = None
+    lowered = text.lower()
+    if lowered in ("👍", "yes", "confirm", "confirmed") or "confirm" in lowered:
+        verdict = "vendor_confirmed"
+    elif lowered in ("👎", "no", "dispute") or "disput" in lowered or "wrong" in lowered:
+        verdict = "vendor_disputed"
+    band.post_finding(0, "vendor_reply", {"detail": f"{frm}: {text}" + (f" → {verdict}" if verdict else "")})
+    return {"received": True, "interpreted": verdict}
+
+
 @router.get("/po1/exceptions")
 def list_exceptions() -> list[dict[str, Any]]:
     with get_conn() as conn:

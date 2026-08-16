@@ -191,6 +191,11 @@ def notify_resolution(
     )
 
 
+def record_inbound(frm: str, text: str) -> None:
+    """A vendor's reply, threaded into the same wires feed as outbound."""
+    _sent.append({"to": frm, "text": text, "card": None, "direction": "in"})
+
+
 def transcript() -> list[dict[str, Any]]:
     """Everything PO1 texted today — drives the demo's messaging panel."""
     return list(_sent)

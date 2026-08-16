@@ -169,6 +169,14 @@ button.intake[disabled]{opacity:.55;cursor:wait}
 .sec-h button.intake{padding:7px 12px;font-size:10px}
 .mini-quiet{padding:22px 14px;text-align:center;font:12.5px/1.5 var(--sans);color:var(--faint)}
 
+.voucher{margin:0;padding:6px 0;display:grid;grid-template-columns:auto 1fr;gap:0}
+.voucher dt{font:500 10px/1.4 var(--mono);letter-spacing:.14em;text-transform:uppercase;
+  color:var(--faint);padding:7px 0 7px 14px;border-bottom:1px solid var(--rule-soft)}
+.voucher dd{margin:0;padding:7px 14px;font:12.5px/1.5 var(--mono);
+  font-variant-numeric:tabular-nums;color:var(--ink);border-bottom:1px solid var(--rule-soft);
+  text-align:right;overflow-wrap:anywhere}
+.voucher dt:nth-last-of-type(1),.voucher dd:last-child{border-bottom:0}
+.voucher dd a{color:var(--brass)}
 .colophon{padding:26px;text-align:center;font:500 10px/1.8 var(--mono);
   letter-spacing:.18em;text-transform:uppercase;color:var(--faint)}
 </style></head><body>
@@ -198,6 +206,11 @@ button.intake[disabled]{opacity:.55;cursor:wait}
   </div>
 
   <div>
+    <section aria-label="Voucher" id="voucher-sec" hidden>
+      <div class="sec-h"><h2>Voucher</h2><span class="cnt" id="v-num"></span></div>
+      <div class="panel"><dl class="voucher" id="voucher"></dl></div>
+    </section>
+
     <section aria-label="Pipeline trace">
       <div class="sec-h"><h2>Processing trace</h2><span class="cnt" id="trace-cnt"></span></div>
       <div class="panel"><div class="bd"><ul class="trace" id="trace"><li class="mini-quiet" style="display:block">Select a ledger line</li></ul></div></div>
@@ -328,6 +341,23 @@ async function tick(){
 async function loadLine(id){
   const d=await j("/po1/invoices/"+id);
   if(!d||d.error)return;
+  const inv=d.invoice||{};
+  $("voucher-sec").hidden=false;
+  $("v-num").textContent=inv.invoice_number||"";
+  const exc=d.exception;
+  $("voucher").innerHTML=[
+    ["Payee",esc(inv.vendor_name)||"—"],
+    ["Amount",usd(inv.amount)],
+    ["Purchase order",esc(inv.po_reference)||"None on file"],
+    ["GL coding",(esc(inv.gl_code)||"—")+" · "+(esc(inv.cost_center)||"")],
+    ["Terms",esc(inv.payment_terms)||"—"],
+    ["Bank on invoice",inv.bank_details?esc(String(inv.bank_details)).slice(0,22):"—"],
+    ["Severity",esc(inv.risk_score)||"—"],
+    ["Disposition",esc(inv.decision||inv.status)||"—"],
+    exc?["Exception",esc(exc.exception_type).replace(/_/g," ")+" → "+esc(exc.owner)]:null,
+    ["Reviewer page",`<a href="/review/${inv.id}" target="_blank" rel="noopener">what an outside reviewer sees →</a>`],
+  ].filter(Boolean).map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join("");
+
   const room=d.room||[];
   $("room-cnt").textContent=room.length?room.length+" messages":"";
   if(room.length)$("room").innerHTML=room.map(p=>{
