@@ -121,4 +121,4 @@ Key endpoints: `POST /po1/process` (upload an invoice) · `POST /po1/demo` (run 
 
 **Kenil Himmatbhai Vaghasiya** — everything.
 
-Built on a six-agent invoice prototype I wrote at an earlier hackathon (see git history), rebuilt during this event into the ten-agent AP department above: real 3-way matching, typed exceptions, delegation of authority, payment scheduling, the Terac/Band/Pioneer/Linq/Stripe integrations, the privacy layer, and the Ledger Floor UI.
+Built during the hackathon: the ten-agent AP architecture (3-way matching, typed exceptions, delegation of authority, payment scheduling), all six sponsor integrations, the privacy layer, the fine-tune loop, the Ledger Floor UI, and the deployment.
