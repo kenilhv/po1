@@ -16,7 +16,13 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
+    disk:
+      name: po1-data
+      mountPath: /data
+      sizeGB: 1
     envVars:
+      - key: PO1_DB_PATH
+        value: /data/invoice_os.db
       - key: PYTHON_VERSION
         value: "3.12"
       - key: TERAC_API_KEY

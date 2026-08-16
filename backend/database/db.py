@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import os
 import sqlite3
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent / "invoice_os.db"
+# On Render this points at the mounted persistent disk, so human labels and
+# ledger history survive redeploys instead of dying with the build's filesystem.
+DB_PATH = Path(os.getenv("PO1_DB_PATH", str(Path(__file__).resolve().parent / "invoice_os.db")))
 
 
 def get_conn() -> sqlite3.Connection:

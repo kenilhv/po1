@@ -134,6 +134,42 @@ def upload_band_registry(body: dict[str, Any]) -> dict[str, Any]:
     return {"installed": len(agents)}
 
 
+@router.post("/po1/terac/webhook")
+def terac_webhook(body: dict[str, Any]) -> dict[str, Any]:
+    """Terac's webhook: a submission changed status or was approved.
+
+    This is what makes an approval in the Terac dashboard reach the floor —
+    the room hears it, the founder's phone hears it, and the escalation row
+    closes, instead of the approval living only inside Terac.
+    """
+    event = str(body.get("event_type") or body.get("type") or "")
+    data = body.get("data") or body
+    status = str(data.get("status") or data.get("to_status") or "").lower()
+    opp_id = str(data.get("opportunity_id") or "")
+    sub_id = str(data.get("id") or data.get("submission_id") or "")
+
+    detail = f"Terac {event or 'submission event'}: {status or 'update'} ({sub_id[:8]})"
+    band.post_finding(0, "terac_escalation", {"detail": detail, "opportunity_id": opp_id})
+
+    if "approved" in (event + status):
+        with get_conn() as conn:
+            conn.execute(
+                """
+                UPDATE terac_escalations
+                SET resolved_at = COALESCE(resolved_at, datetime('now')),
+                    reasoning = COALESCE(reasoning, 'Approved by the study host on Terac')
+                WHERE reviewer_ref = ? AND resolved_at IS NULL
+                """,
+                (opp_id,),
+            )
+            conn.commit()
+        linq.alert_founder(
+            0, "Terac panel", 0.0, "submission_approved",
+            f"A reviewer's submission was approved on Terac ({sub_id[:8]}).",
+        )
+    return {"received": True, "event": event, "status": status}
+
+
 @router.post("/po1/linq/inbound")
 def linq_inbound(body: dict[str, Any]) -> dict[str, Any]:
     """Receive a vendor's reply from Linq's webhook.
