@@ -66,11 +66,28 @@ def get_invoice(invoice_id: int) -> dict[str, Any]:
         ).fetchone()
     if not inv:
         return {"error": "not found"}
+
+    room = band.room_transcript(invoice_id)
+    if not room:
+        # The live room is in-process; after a restart, replay the persisted
+        # audit trail so the floor still shows what happened.
+        with get_conn() as conn:
+            audit = conn.execute(
+                "SELECT agent_name, input_summary, output_summary FROM audit_log "
+                "WHERE invoice_id = ? AND agent_name != '' ORDER BY id",
+                (invoice_id,),
+            ).fetchall()
+        room = [
+            {"agent": a["agent_name"],
+             "finding": {"detail": a["input_summary"] or a["output_summary"]}}
+            for a in audit
+        ]
+
     return {
         "invoice": dict(inv),
         "exception": dict(exc) if exc else None,
         "escalation": dict(esc) if esc else None,
-        "room": band.room_transcript(invoice_id),
+        "room": room,
     }
 
 
