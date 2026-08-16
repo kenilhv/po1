@@ -31,50 +31,50 @@ Ten specialists plus a runtime-recruited controller. Every handoff is a real mes
 
 ```mermaid
 flowchart TB
-    INV[/"Invoice arrives<br/>(PDF / email forward)"/]
+    INV(["Invoice arrives — PDF / email forward"])
 
-    subgraph GATE["Gate — before anything else"]
-        VO["<b>vendor_onboarder</b><br/>W-9 / tax ID on file?<br/>bank details changed?"]
+    subgraph GATE["1 · Gate"]
+        VO["vendor_onboarder<br/>W-9 / tax ID on file?<br/>bank details changed?"]
     end
 
-    subgraph EXTRACT["Extraction"]
-        IP["<b>invoice_parser</b><br/>Fastino GLiNER2 (via Pioneer):<br/>one encoder pass → vendor, amount,<br/>PO ref, terms, bank, with confidence"]
+    subgraph EXTRACT["2 · Extraction"]
+        IP["invoice_parser<br/>Fastino GLiNER2 via Pioneer:<br/>vendor, amount, PO ref, terms, bank"]
     end
 
-    subgraph SIGNALS["Parallel signal generators — each posts findings to the Band room"]
-        TWM["<b>three_way_matcher</b><br/>PO + goods receipt + invoice:<br/>which of 3 legs agree"]
-        DUP["<b>duplicate_detector</b><br/>exact invoice-number match conclusive;<br/>same-amount only a soft signal"]
-        FRA["<b>fraud_signal</b><br/>banking-change flag from the gate<br/>+ vendor registry signals"]
-        GLC["<b>gl_coder</b><br/>GL account + cost center<br/>→ enables budget check"]
+    subgraph SIGNALS["3 · Parallel signals — each posts findings to the Band room"]
+        TWM["three_way_matcher<br/>PO + goods receipt + invoice"]
+        DUP["duplicate_detector<br/>invoice-number match conclusive,<br/>same-amount only a soft signal"]
+        FRA["fraud_signal<br/>banking-change flag + registry"]
+        GLC["gl_coder<br/>GL account + cost center"]
     end
 
-    subgraph JUDGE["Judgment — reads the room, not return values"]
-        EC["<b>exception_classifier</b><br/>ONE typed exception with a named owner:<br/>price_variance→buyer · missing_receipt→receiving<br/>duplicate→ap · vendor_bank_change→controller"]
-        RS["<b>risk_scorer</b><br/>severity of the <i>typed</i> exception:<br/>amount × vendor trust × variance magnitude<br/>(a 54% overbill escalates regardless of trust)"]
-        AR["<b>approval_router</b><br/>delegation of authority:<br/>≤$2k clean → auto · ≤$10k → founder<br/>above / critical → hire a human"]
+    subgraph JUDGE["4 · Judgment — reads the room, not return values"]
+        EC["exception_classifier<br/>one typed exception, named owner:<br/>price_variance to buyer<br/>vendor_bank_change to controller"]
+        RS["risk_scorer<br/>severity: amount x vendor trust<br/>x variance magnitude"]
+        AR["approval_router<br/>under 2k clean: auto<br/>under 10k: founder<br/>above / critical: hire a human"]
     end
 
-    subgraph HUMAN["When the agent won't decide alone"]
-        CTRL["<b>controller</b> (recruited at runtime<br/>into the Band room on any banking change)"]
-        TER["<b>Terac escalation</b><br/>paid task for a verified reviewer —<br/>they see a <i>pseudonymized</i> invoice:<br/>stable alias, scaled amounts,<br/>no bank/tax/invoice numbers"]
-        VERDICT{{"Human verdict posted<br/>to the Band room —<br/>router is blocked until it lands"}}
+    subgraph HUMAN["5 · When the agent won't decide alone"]
+        CTRL["controller<br/>recruited into the room at runtime<br/>on any banking change"]
+        TER["Terac escalation<br/>paid verified reviewer sees a<br/>pseudonymized invoice only"]
+        VERDICT{"human verdict posted to the room —<br/>router blocked until it lands"}
     end
 
-    subgraph SETTLE["Settlement"]
-        PS["<b>payment_scheduler</b><br/>pay now to capture 2/10 net 30 discount,<br/>or batch into the hourly payment run<br/>(Render cron)"]
-        PAY["Stripe payment +<br/>Linq remittance advice<br/>to the vendor (iMessage)"]
+    subgraph SETTLE["6 · Settlement"]
+        PS["payment_scheduler<br/>capture 2/10 net 30 discount<br/>or batch into hourly payment run"]
+        PAY["Stripe payment +<br/>Linq remittance iMessage"]
     end
 
     INV --> VO --> IP
     IP --> TWM & DUP & FRA & GLC
-    TWM & DUP & FRA & GLC -->|"findings in the room"| EC
-    VO -.->|"bank-change flag"| FRA
+    TWM & DUP & FRA & GLC -- findings in the room --> EC
+    VO -. bank-change flag .-> FRA
     EC --> RS --> AR
-    EC -.->|"vendor_bank_change"| CTRL
-    AR -->|"clean / within authority"| PS --> PAY
-    AR -->|"above authority or critical"| TER --> VERDICT
-    VERDICT -->|"approve"| PS
-    VERDICT -->|"reject"| X[/"BLOCKED — founder alerted<br/>on their phone via Linq"/]
+    EC -. vendor_bank_change .-> CTRL
+    AR -- clean, within authority --> PS --> PAY
+    AR -- above authority or critical --> TER --> VERDICT
+    VERDICT -- approve --> PS
+    VERDICT -- reject --> X(["BLOCKED — founder alerted via Linq"])
 ```
 
 ### Why a typed exception, not a risk score
